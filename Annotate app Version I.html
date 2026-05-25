@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Annotate App V8</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F7F6F3;--surface:#FFFFFF;--surface2:#F0EEE9;--border:#E2DED6;--border2:#C8C4BC;
+  --text:#1A1916;--text2:#6B6760;--text3:#9E9B96;
+  --green:#2D6A4F;--green-bg:#EBF5F0;--green-border:#B7DEC9;
+  --red:#C0392B;--red-bg:#FDECEA;--red-border:#F5B7B1;
+  --amber:#92610A;--amber-bg:#FEF6E4;--amber-border:#F0D090;
+  --blue:#1A4A7A;--blue-bg:#EBF2FB;--blue-border:#A8C8F0;
+  --purple:#5B2D8A;--purple-bg:#F3EEFB;--purple-border:#C9AEF0;
+  --r:10px;--rl:14px;
+  font-family:'Georgia','Times New Roman',serif;
+}
+body{background:var(--bg);min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:20px 0 40px}
+#app{width:100%;max-width:420px;background:var(--surface);border-radius:20px;overflow:hidden;border:0.5px solid var(--border2);box-shadow:0 4px 24px rgba(0,0,0,.1);display:flex;flex-direction:column;min-height:680px}
+.screen{display:none;flex-direction:column;flex:1}
+.screen.active{display:flex}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.topbar .icon{font-size:20px;line-height:1}
+.topbar h2{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-.01em}
+.topbar .badge{margin-left:auto;font-size:11px;font-family:monospace;background:var(--blue-bg);color:var(--blue);padding:3px 10px;border-radius:20px;border:0.5px solid var(--blue-border)}
+.back-btn{margin-left:auto;font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);cursor:pointer;color:var(--text2);font-family:monospace}
+.body{flex:1;padding:18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px}
+.label{font-size:10px;color:var(--text3);margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-family:monospace}
+.val{font-size:13px;color:var(--text);font-family:monospace;word-break:break-all}
+.img-box{background:var(--surface2);border-radius:var(--r);height:200px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1.5px dashed var(--border2);flex-shrink:0;overflow:hidden}
+.img-box img{width:100%;height:100%;object-fit:cover;display:block}
+.q{font-size:16px;font-weight:600;color:var(--text);line-height:1.4}
+.sub{font-size:13px;color:var(--text2);line-height:1.5}
+.btn{width:100%;padding:12px;border-radius:var(--r);border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;font-family:'Georgia',serif;flex-shrink:0}
+.btn:hover{background:var(--surface2)}
+.btn:active{transform:scale(.99)}
+.btn.primary{background:var(--text);color:var(--surface);border-color:var(--text)}
+.btn.primary:hover{opacity:.88}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn.success{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.btn.danger{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
+.btn.warn{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)}
+.btn.exit{background:var(--surface2);color:var(--text3);border-color:var(--border);font-size:13px;padding:10px}
+.btn-icon{font-size:15px;line-height:1}
+.row{display:flex;gap:10px;flex-shrink:0}
+.row .btn{flex:1}
+input,textarea{width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:14px;font-family:'Georgia',serif;transition:border .15s}
+input:focus,textarea:focus{outline:none;border-color:#888}
+textarea{resize:vertical;min-height:80px;line-height:1.5}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-family:monospace}
+.warn-box{background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--r);padding:14px;display:flex;gap:10px;align-items:flex-start;flex-shrink:0}
+.warn-box .wi{font-size:20px}
+.warn-box p{font-size:13px;color:var(--amber);line-height:1.5}
+.info-box{background:var(--blue-bg);border:1px solid var(--blue-border);border-radius:var(--r);padding:14px;flex-shrink:0}
+.info-box .q{color:var(--blue)}
+.info-box .sub{color:var(--blue);opacity:.8;margin-top:6px}
+.no-empty{font-size:12px;color:var(--red);display:none;font-family:monospace}
+.no-empty.show{display:block}
+.meta-row{display:flex;gap:8px;flex-shrink:0}
+.meta-block{flex:1;background:var(--surface2);border-radius:var(--r);padding:10px}
+.meta-block .ml{font-size:10px;color:var(--text3);margin-bottom:2px;font-family:monospace;text-transform:uppercase;font-weight:700}
+.meta-block .mv{font-size:12px;color:var(--text);font-family:monospace}
+
+/* ── Config screen ── */
+.config-hero{display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 18px 0}
+.config-hero .app-icon{font-size:48px}
+.config-hero h1{font-size:22px;font-weight:600;color:var(--text)}
+.config-hero p{font-size:13px;color:var(--text2);text-align:center;line-height:1.6;max-width:300px}
+.config-form{padding:16px 18px 28px;display:flex;flex-direction:column;gap:12px}
+.config-saved{font-size:12px;color:var(--green);font-family:monospace;text-align:center;display:none}
+
+/* ── Role select ── */
+.role-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+.role-hero .app-icon{font-size:48px}
+.role-hero h1{font-size:22px;font-weight:600;color:var(--text)}
+.role-hero .sheet-tag{font-size:11px;font-family:monospace;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);padding:3px 10px;border-radius:20px}
+.role-btns{padding:0 18px 28px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.role-btn{width:100%;padding:18px;border-radius:var(--rl);border:1px solid;cursor:pointer;display:flex;align-items:center;gap:16px;transition:all .18s;text-align:left}
+.role-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.07)}
+.role-btn.admin{border-color:var(--purple-border);background:var(--purple-bg)}
+.role-btn.admin:hover{background:#ede5f9}
+.role-btn.user{border-color:var(--blue-border);background:var(--blue-bg)}
+.role-btn.user:hover{background:#deeaf8}
+.role-btn .rb-icon{font-size:28px;flex-shrink:0}
+.role-btn .rb-title{font-size:15px;font-weight:600;color:var(--text)}
+.role-btn .rb-sub{font-size:12px;color:var(--text2);font-family:monospace;margin-top:2px}
+.settings-link{text-align:center;font-size:12px;color:var(--text3);font-family:monospace;cursor:pointer;text-decoration:underline;padding-bottom:18px}
+.settings-link:hover{color:var(--text2)}
+
+/* ── Loading spinner ── */
+.loading-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:30px}
+.spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--text);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-state p{font-size:13px;color:var(--text2);font-family:monospace;text-align:center}
+
+/* ── Stat grid ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{background:var(--surface2);border-radius:var(--r);border:1px solid var(--border);padding:12px}
+.stat-card.green{background:var(--green-bg);border-color:var(--green-border)}
+.stat-card.amber{background:var(--amber-bg);border-color:var(--amber-border)}
+.stat-card.blue{background:var(--blue-bg);border-color:var(--blue-border)}
+.stat-num{font-size:28px;font-weight:700;color:var(--text);font-family:monospace;line-height:1}
+.stat-card.green .stat-num{color:var(--green)}
+.stat-card.amber .stat-num{color:var(--amber)}
+.stat-card.blue .stat-num{color:var(--blue)}
+.stat-lbl{font-size:11px;color:var(--text2);font-family:monospace;margin-top:3px}
+
+/* ── Detail rows ── */
+.detail-list{display:flex;flex-direction:column;gap:6px}
+.detail-row{border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.detail-header{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;background:var(--surface);user-select:none}
+.detail-header:hover{background:var(--surface2)}
+.detail-img{width:36px;height:36px;border-radius:6px;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+.detail-name{font-size:12px;color:var(--text);font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-status{font-size:10px;font-family:monospace;padding:2px 7px;border-radius:10px;flex-shrink:0;border:1px solid}
+.detail-status.completed{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.detail-status.unidentifiable{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)}
+.detail-chev{font-size:12px;color:var(--text3);transition:transform .2s;flex-shrink:0}
+.detail-chev.open{transform:rotate(180deg)}
+.detail-body{display:none;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface2);font-size:12px;font-family:monospace;color:var(--text2);line-height:1.8}
+.detail-body.open{display:block}
+.detail-body strong{color:var(--text)}
+
+/* ── Annotate peek ── */
+#annotate-img-peek{flex-shrink:0;background:var(--surface2);border-bottom:1px solid var(--border);overflow:hidden;transition:height .28s cubic-bezier(.4,0,.2,1);height:42px}
+.peek-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;user-select:none;min-height:42px}
+.peek-callout{font-size:12px;color:var(--blue);font-weight:600;font-family:monospace;flex:1;display:flex;align-items:center;gap:6px}
+.peek-callout .dot{width:7px;height:7px;border-radius:50%;background:var(--blue);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.75)}}
+.peek-callout.open-state{color:var(--text2);font-weight:400}
+.peek-callout.open-state .dot{display:none}
+.peek-chevron{font-size:13px;color:var(--text3);transition:transform .22s}
+.peek-chevron.open{transform:rotate(180deg)}
+.peek-inner{padding:0 16px 14px;display:flex;gap:12px;align-items:flex-start}
+.peek-thumb{width:100px;height:80px;border-radius:8px;overflow:hidden;border:1px solid var(--border);flex-shrink:0;background:var(--surface2);display:flex;align-items:center;justify-content:center}
+.peek-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.peek-meta{flex:1;display:flex;flex-direction:column;gap:6px}
+.peek-meta .pm-row .pm-label{font-size:10px;color:var(--text3);font-family:monospace;text-transform:uppercase;font-weight:700;margin-bottom:1px}
+.peek-meta .pm-row .pm-val{font-size:11px;color:var(--text);font-family:monospace;word-break:break-all}
+.search-wrap{position:relative;flex-shrink:0}
+.search-wrap input{padding-left:36px;font-family:monospace;font-size:13px}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:15px;pointer-events:none}
+.item-list{display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;min-height:0}
+.item-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r);border:1px solid var(--border);background:var(--surface);transition:all .12s;flex-shrink:0}
+.item-row:hover{background:var(--surface2)}
+.item-row.ticked{background:var(--green-bg);border-color:var(--green-border)}
+.item-row .item-name{font-size:13px;color:var(--text);flex:1;font-family:monospace}
+.item-row.ticked .item-name{color:var(--green)}
+.tick-btn{font-size:12px;padding:5px 10px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);cursor:pointer;color:var(--text2);white-space:nowrap;font-family:monospace;transition:all .12s}
+.item-row.ticked .tick-btn{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+#s-annotate .annot-body{flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:10px;overflow:hidden;min-height:0}
+#s-annotate .annot-footer{padding:12px 16px;border-top:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.ticked-summary{background:var(--surface2);border-radius:var(--r);border:1px solid var(--border);padding:10px 12px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.ticked-summary .ts-icon{font-size:15px}
+.ticked-summary .ts-text{font-size:12px;color:var(--text2);font-family:monospace;flex:1}
+.ticked-summary .ts-count{font-size:13px;font-weight:700;color:var(--green);font-family:monospace}
+.classify-grid{display:flex;flex-direction:column;gap:10px}
+.classify-opt{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--border);border-radius:var(--rl);background:var(--surface);cursor:pointer;transition:all .15s;flex-shrink:0}
+.classify-opt:hover{background:var(--surface2)}
+.classify-opt.selected{border-color:var(--blue-border);background:var(--blue-bg)}
+.classify-opt .ci{font-size:26px}
+.classify-opt .ct{font-size:14px;font-weight:600;color:var(--text)}
+.classify-opt .cs{font-size:12px;color:var(--text2);font-family:monospace}
+.classify-opt.selected .ct{color:var(--blue)}
+.classify-opt.selected .cs{color:var(--blue);opacity:.8}
+.summary-item{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);gap:12px}
+.summary-item:last-child{border:none}
+.summary-key{color:var(--text2);font-family:monospace;font-size:12px;white-space:nowrap;padding-top:1px}
+.summary-val{color:var(--text);font-weight:600;text-align:right;word-break:break-word;font-family:monospace;font-size:12px}
+.success-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:28px;overflow-y:auto}
+.success-screen .big-icon{font-size:60px;line-height:1}
+.success-screen h2{font-size:22px;font-weight:600;color:var(--text);text-align:center}
+.success-screen p{font-size:14px;color:var(--text2);text-align:center;line-height:1.6}
+
+/* ── Overlays ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:flex-end;justify-content:center;padding:0 0 30px}
+.overlay.show{display:flex}
+.overlay-card{background:var(--surface);border-radius:20px;padding:24px 20px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 40px rgba(0,0,0,.18)}
+.overlay-card h3{font-size:17px;font-weight:600;color:var(--text);text-align:center}
+.overlay-card p{font-size:13px;color:var(--text2);text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ SETUP / CONFIG ══ -->
+<div id="s-config" class="screen active">
+  <div class="config-hero">
+    <div class="app-icon">📱</div>
+    <h1>WasteAnnotate</h1>
+    <p>Paste your Google Apps Script URL below to connect the app to your Google Sheet. You only do this once.</p>
+  </div>
+  <div class="config-form">
+    <div class="field">
+      <label>Apps Script URL</label>
+      <input type="text" id="config-url" placeholder="https://script.google.com/macros/s/…/exec"/>
+    </div>
+    <div id="config-err" class="no-empty">Please paste a valid Apps Script URL first.</div>
+    <button class="btn primary" onclick="saveConfig()"><span class="btn-icon">✅</span> Save and connect</button>
+    <div class="config-saved" id="config-saved">✅ Connected! Taking you to the app…</div>
+  </div>
+</div>
+
+<!-- ══ ROLE SELECT ══ -->
+<div id="s-role" class="screen">
+  <div class="role-hero">
+    <div class="app-icon">📱</div>
+    <h1>WasteAnnotate</h1>
+    <div class="sheet-tag" id="sheet-tag">● Connected to Google Sheet</div>
+  </div>
+  <div class="role-btns">
+    <div class="role-btn admin" onclick="gotoAdmin()">
+      <span class="rb-icon">🔧</span>
+      <div>
+        <div class="rb-title">Admin</div>
+        <div class="rb-sub">View dashboard & annotation results</div>
+      </div>
+    </div>
+    <div class="role-btn user" onclick="gotoUserFlow()">
+      <span class="rb-icon">👤</span>
+      <div>
+        <div class="rb-title">User</div>
+        <div class="rb-sub">Annotate images in the queue</div>
+      </div>
+    </div>
+  </div>
+  <div class="settings-link" onclick="goto('s-config')">⚙ Change Apps Script URL</div>
+</div>
+
+<!-- ══ LOADING ══ -->
+<div id="s-loading" class="screen">
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p id="loading-msg">Loading images from Google Sheet…</p>
+  </div>
+</div>
+
+<!-- ══ ADMIN ══ -->
+<div id="s-admin" class="screen">
+  <div class="topbar">
+    <span class="icon">🔧</span><h2>Admin dashboard</h2>
+    <button class="back-btn" onclick="goto('s-role')">← Home</button>
+  </div>
+  <div class="body">
+    <div class="label">Live stats</div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num" id="d-total">—</div><div class="stat-lbl">Total images</div></div>
+      <div class="stat-card blue"><div class="stat-num" id="d-pending">—</div><div class="stat-lbl">Pending</div></div>
+      <div class="stat-card green"><div class="stat-num" id="d-completed">—</div><div class="stat-lbl">Completed</div></div>
+      <div class="stat-card amber"><div class="stat-num" id="d-unid">—</div><div class="stat-lbl">Unidentifiable</div></div>
+    </div>
+    <button class="btn" onclick="gotoAdmin()" style="font-size:13px;padding:10px">↻ Refresh dashboard</button>
+    <div id="admin-results" style="display:none">
+      <div class="label" style="margin-bottom:6px">Annotation results</div>
+      <div class="detail-list" id="detail-list"></div>
+    </div>
+    <div id="admin-empty" style="display:none;font-size:13px;color:var(--text3);font-family:monospace;text-align:center;padding:16px 0">No completed annotations yet.</div>
+  </div>
+</div>
+
+<!-- ══ USER: IMAGE REVIEW ══ -->
+<div id="s-image" class="screen">
+  <div class="topbar"><span class="icon">🖼️</span><h2>Image review</h2><span class="badge" id="queue-badge">—</span></div>
+  <div class="body">
+    <div class="card"><div class="label">Image ID</div><div class="val" id="img-id">—</div></div>
+    <div class="img-box" id="review-img-box"><span style="font-size:36px">🗑️</span></div>
+    <div class="meta-row">
+      <div class="meta-block"><div class="ml">Row</div><div class="mv" id="meta-row">—</div></div>
+      <div class="meta-block"><div class="ml">Status</div><div class="mv" id="meta-status">Pending</div></div>
+    </div>
+    <div class="q">Can you see waste clearly?</div>
+    <div class="row">
+      <button class="btn success" onclick="gotoAnnotation()"><span class="btn-icon">✅</span> Yes</button>
+      <button class="btn danger" onclick="gotoUnidentifiable()"><span class="btn-icon">⚠</span> No</button>
+    </div>
+    <button class="btn exit" onclick="showExit()">✕ &nbsp;Exit session</button>
+  </div>
+</div>
+
+<!-- ══ USER: UNIDENTIFIABLE ══ -->
+<div id="s-unid" class="screen">
+  <div class="topbar"><span class="icon">⚠</span><h2>Cannot identify</h2></div>
+  <div class="body">
+    <div class="warn-box"><span class="wi">⚠</span><p>Flag this image and provide a short reason why the waste cannot be identified.</p></div>
+    <div class="card"><div class="label">Image ID</div><div class="val" id="unid-img-id">—</div></div>
+    <div class="field"><label>Reason</label><textarea id="unid-reason" placeholder="e.g. Image too blurry, poor lighting, obstructed view…"></textarea></div>
+    <div id="unid-err" class="no-empty">Please enter a reason before saving.</div>
+    <button class="btn warn" id="unid-btn" onclick="saveUnidentifiable()"><span class="btn-icon">⚠</span> Save and continue</button>
+    <div id="unid-saved" style="display:none;font-size:13px;color:var(--green);text-align:center;padding:4px 0;font-family:monospace">✅ Saved to Google Sheet</div>
+  </div>
+</div>
+
+<!-- ══ USER: OBSERVE ══ -->
+<div id="s-observe" class="screen">
+  <div class="topbar"><span class="icon">🔍</span><h2>Step 1 of 3 — Observe</h2></div>
+  <div class="body">
+    <div class="img-box" id="observe-img-box"><span style="font-size:36px">🗑️</span></div>
+    <div class="info-box">
+      <div class="q">Look at the image closely and carefully.</div>
+      <div class="sub">Identify each type of waste item visible before proceeding to the annotation list.</div>
+    </div>
+    <button class="btn primary" onclick="goto('s-annotate')">Ready to annotate →</button>
+  </div>
+</div>
+
+<!-- ══ USER: ANNOTATE ══ -->
+<div id="s-annotate" class="screen">
+  <div class="topbar"><span class="icon">✅</span><h2>Step 2 of 3 — Annotate</h2><span class="badge" id="ticked-count-badge">0 ticked</span></div>
+  <div id="annotate-img-peek">
+    <div class="peek-bar" onclick="togglePeek()" id="peek-bar" aria-expanded="false">
+      <span class="peek-callout" id="peek-callout"><span class="dot"></span> Tap to see the image</span>
+      <span class="peek-chevron" id="peek-chevron">▾</span>
+    </div>
+    <div id="peek-content" class="peek-inner">
+      <div class="peek-thumb" id="peek-thumb-box"></div>
+      <div class="peek-meta">
+        <div class="pm-row"><div class="pm-label">Image ID</div><div class="pm-val" id="peek-img-id-label">—</div></div>
+        <div class="pm-row"><div class="pm-label">Sheet Row</div><div class="pm-val" id="peek-row">—</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="annot-body">
+    <div class="ticked-summary">
+      <span class="ts-icon">✅</span>
+      <span class="ts-text" id="ticked-summary-text">No items ticked yet</span>
+      <span class="ts-count" id="ticked-summary-count"></span>
+    </div>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="item-search" placeholder="Search master item list…" oninput="filterItems()"/>
+    </div>
+    <div class="item-list" id="item-list"></div>
+  </div>
+  <div class="annot-footer">
+    <div class="q" style="font-size:14px">Any more items to check?</div>
+    <button class="btn primary" onclick="gotoBagCheck()"><span class="btn-icon">✅</span> No — done annotating</button>
+  </div>
+</div>
+
+<!-- ══ USER: BAG CHECK ══ -->
+<div id="s-bagcheck" class="screen">
+  <div class="topbar"><span class="icon">🛍️</span><h2>Step 3 of 3 — Bags</h2></div>
+  <div class="body">
+    <div class="img-box" id="bagcheck-img-box"><span style="font-size:36px">🗑️</span></div>
+    <div class="q">Do you see any garbage bags?</div>
+    <div class="sub">If yes, you'll classify the bag type next.</div>
+    <div class="row">
+      <button class="btn success" onclick="gotoClassify()"><span class="btn-icon">✅</span> Yes</button>
+      <button class="btn" onclick="gotoSubmit()">No, skip</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ USER: CLASSIFY ══ -->
+<div id="s-classify" class="screen">
+  <div class="topbar"><span class="icon">🏷️</span><h2>Bag classification</h2></div>
+  <div class="body">
+    <div class="q">Select the bag category</div>
+    <div class="sub">Choose the option that best describes the source of the garbage bags.</div>
+    <div class="classify-grid">
+      <div class="classify-opt" onclick="selectBagType('household',this)"><span class="ci">🏠</span><div><div class="ct">Household</div><div class="cs">Residential waste bags</div></div></div>
+      <div class="classify-opt" onclick="selectBagType('hotel_restaurant',this)"><span class="ci">🍽️</span><div><div class="ct">Hotel or Restaurant</div><div class="cs">Food service / hospitality waste</div></div></div>
+      <div class="classify-opt" onclick="selectBagType('industrial',this)"><span class="ci">🏭</span><div><div class="ct">Industrial</div><div class="cs">Commercial or manufacturing waste</div></div></div>
+    </div>
+    <div id="classify-err" class="no-empty">Please select a category.</div>
+    <button class="btn primary" onclick="confirmClassify()"><span class="btn-icon">✅</span> Confirm classification</button>
+  </div>
+</div>
+
+<!-- ══ USER: SUBMIT ══ -->
+<div id="s-submit" class="screen">
+  <div class="topbar"><span class="icon">📦</span><h2>Review and submit</h2></div>
+  <div class="body">
+    <div class="card">
+      <div class="label" style="margin-bottom:10px">Submission summary</div>
+      <div class="summary-item"><span class="summary-key">Image ID</span><span class="summary-val" id="sum-id">—</span></div>
+      <div class="summary-item"><span class="summary-key">Items found</span><span class="summary-val" id="sum-items">—</span></div>
+      <div class="summary-item"><span class="summary-key">Bag type</span><span class="summary-val" id="sum-bag">—</span></div>
+      <div class="summary-item"><span class="summary-key">Status change</span><span class="summary-val">Pending → <span style="color:var(--green)">Completed</span></span></div>
+    </div>
+    <button class="btn primary" id="submit-btn" onclick="doSubmit()"><span class="btn-icon">✅</span> Submit & save to Google Sheet</button>
+    <div id="submit-loading" style="display:none;text-align:center;font-size:12px;color:var(--text2);padding:4px 0;font-family:monospace">Saving to Google Sheet…</div>
+  </div>
+</div>
+
+<!-- ══ ALL DONE ══ -->
+<div id="s-done" class="screen">
+  <div class="topbar"><span class="icon">🎉</span><h2>Session complete</h2></div>
+  <div class="success-screen">
+    <div class="big-icon">🎉</div>
+    <h2>All done!</h2>
+    <p>No more pending images in the queue. All annotations have been saved to Google Sheets.</p>
+    <div class="card" style="width:100%">
+      <div class="label" style="margin-bottom:8px">This session</div>
+      <div class="summary-item"><span class="summary-key">Annotated</span><span class="summary-val" id="done-annotated">—</span></div>
+      <div class="summary-item"><span class="summary-key">Unidentifiable</span><span class="summary-val" id="done-unid">—</span></div>
+    </div>
+    <button class="btn success" onclick="gotoAdmin()"><span class="btn-icon">🔧</span> View admin dashboard</button>
+    <button class="btn exit" onclick="showExit()">✕ &nbsp;Exit app</button>
+  </div>
+</div>
+
+</div><!-- /#app -->
+
+<!-- Exit overlay -->
+<div class="overlay" id="exit-overlay">
+  <div class="overlay-card">
+    <h3>Exit session?</h3>
+    <p>Your progress has been saved to Google Sheets. Remaining images stay pending for next time.</p>
+    <button class="btn danger" onclick="confirmExit()"><span class="btn-icon">✕</span> Yes, exit</button>
+    <button class="btn" onclick="hideExit()">Cancel — keep going</button>
+  </div>
+</div>
+
+<!-- No pending overlay -->
+<div class="overlay" id="nopending-overlay">
+  <div class="overlay-card">
+    <h3>No pending images</h3>
+    <p>There are no images with Status = "Pending" in your Google Sheet right now. Ask your admin to add more.</p>
+    <button class="btn primary" onclick="document.getElementById('nopending-overlay').classList.remove('show')">Got it</button>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════
+   MASTER ITEM LIST
+══════════════════════════════════════════ */
+const MASTER_ITEMS=['Plastic bottles','Glass bottles','Aluminium cans','Steel cans','Cardboard boxes','Newspaper / paper','Food packaging','Styrofoam containers','Plastic bags','Clothing / textiles','Electronic waste','Batteries','Tyres','Metal scraps','Wood offcuts','Organic food waste','Garden waste','Hazardous containers','Medical waste','Construction rubble','Mattress / furniture','Paint cans','Cooking oil containers','Broken glass','Polystyrene blocks','Printer cartridges','CDs / DVDs','Rope / cables','Foam padding','Mixed recyclables'];
+
+/* ══════════════════════════════════════════
+   STATE
+══════════════════════════════════════════ */
+let SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyjh4_diwVqMV8Dc0xtCp2KdEFSoC8Oaf21-p5ozwbBtDJuv71n6u8-YrIxnHYknZgrDA/exec';
+let QUEUE = [];   // only Pending images fetched from Sheet
+let ALL_DATA = []; // full sheet data for admin
+let state = {queueIdx:0, tickedItems:[], bagType:null, annotatedCount:0, unidCount:0, peekOpen:false};
+
+/* ══════════════════════════════════════════
+   NAVIGATION
+══════════════════════════════════════════ */
+function goto(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function currentImg(){return QUEUE[state.queueIdx];}
+
+/* ══════════════════════════════════════════
+   CONFIG — save URL to localStorage
+══════════════════════════════════════════ */
+function saveConfig(){
+  const url = document.getElementById('config-url').value.trim();
+  if(!url.startsWith('https://')){
+    document.getElementById('config-err').classList.add('show'); return;
+  }
+  document.getElementById('config-err').classList.remove('show');
+  SCRIPT_URL = url;
+  
+  document.getElementById('config-saved').style.display='block';
+  setTimeout(()=>{ document.getElementById('config-saved').style.display='none'; goto('s-role'); }, 1200);
+}
+
+/* ══════════════════════════════════════════
+   API CALLS TO APPS SCRIPT
+══════════════════════════════════════════ */
+async function apiGet(action){
+  const url = `${SCRIPT_URL}?action=${action}`;
+  const res = await fetch(url);
+  return res.json();
+}
+
+async function apiPost(payload){
+  await fetch(SCRIPT_URL, {
+    method:'POST',
+    mode:'no-cors',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+}
+
+/* ══════════════════════════════════════════
+   ADMIN — load all data & render dashboard
+══════════════════════════════════════════ */
+async function gotoAdmin(){
+  goto('s-loading');
+  document.getElementById('loading-msg').textContent = 'Loading dashboard from Google Sheet…';
+  try{
+    const data = await apiGet('getAll');
+    ALL_DATA = data.rows || [];
+    renderAdmin();
+    goto('s-admin');
+  } catch(e){
+    alert('Could not reach Google Sheet. Check your Apps Script URL in Settings.');
+    goto('s-role');
+  }
+}
+
+function renderAdmin(){
+  const total     = ALL_DATA.length;
+  const pending   = ALL_DATA.filter(r=>r.status==='Pending').length;
+  const completed = ALL_DATA.filter(r=>r.status==='Completed').length;
+  const unid      = ALL_DATA.filter(r=>r.status==='Unidentifiable').length;
+  document.getElementById('d-total').textContent     = total;
+  document.getElementById('d-pending').textContent   = pending;
+  document.getElementById('d-completed').textContent = completed;
+  document.getElementById('d-unid').textContent      = unid;
+
+  const processed = ALL_DATA.filter(r=>r.status!=='Pending');
+  const ar = document.getElementById('admin-results');
+  const ae = document.getElementById('admin-empty');
+  if(processed.length===0){ ar.style.display='none'; ae.style.display='block'; return; }
+  ar.style.display='block'; ae.style.display='none';
+  document.getElementById('detail-list').innerHTML = processed.map((r,i)=>{
+    const sc = r.status==='Completed'?'completed':'unidentifiable';
+    const sl = r.status==='Completed'?'✅ Completed':'⚠ Unidentifiable';
+    const body = r.status==='Completed'
+      ? `<strong>Items found:</strong> ${r.items||'None'}<br/><strong>Bag type:</strong> ${r.bagType||'None'}<br/><strong>Annotated at:</strong> ${r.annotatedAt||'—'}`
+      : `<strong>Reason:</strong> ${r.reason||'—'}<br/><strong>Flagged at:</strong> ${r.annotatedAt||'—'}`;
+    return `<div class="detail-row">
+      <div class="detail-header" onclick="toggleDetail('db-${i}','dc-${i}')">
+        <img class="detail-img" src="${r.imageUrl}" alt="" onerror="this.style.opacity='.3'"/>
+        <span class="detail-name">${r.imageId||r.imageUrl}</span>
+        <span class="detail-status ${sc}">${sl}</span>
+        <span class="detail-chev" id="dc-${i}">▾</span>
+      </div>
+      <div class="detail-body" id="db-${i}">${body}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(bid,cid){
+  const b=document.getElementById(bid); const c=document.getElementById(cid);
+  const o=b.classList.toggle('open'); c.classList.toggle('open',o);
+}
+
+/* ══════════════════════════════════════════
+   USER FLOW — fetch pending images
+══════════════════════════════════════════ */
+async function gotoUserFlow(){
+  goto('s-loading');
+  document.getElementById('loading-msg').textContent = 'Fetching pending images…';
+  try{
+    const data = await apiGet('getPending');
+    QUEUE = data.rows || [];
+    if(QUEUE.length===0){
+      goto('s-role');
+      document.getElementById('nopending-overlay').classList.add('show');
+      return;
+    }
+    state = {queueIdx:0, tickedItems:[], bagType:null, annotatedCount:0, unidCount:0, peekOpen:false};
+    loadImage();
+    goto('s-image');
+  } catch(e){
+    alert('Could not reach Google Sheet. Check your Apps Script URL.');
+    goto('s-role');
+  }
+}
+
+/* ══════════════════════════════════════════
+   IMAGE HELPERS
+══════════════════════════════════════════ */
+function setImg(boxId, url){
+  const box = document.getElementById(boxId);
+  if(url){
+    box.innerHTML = `<img src="${url}" alt="waste image" onerror="this.parentElement.innerHTML='<span style=font-size:36px>🖼️</span><span style=font-size:12px;color:var(--text3);font-family:monospace>Image failed to load</span>'"/>`;
+  } else {
+    box.innerHTML = `<span style="font-size:36px">🗑️</span>`;
+  }
+}
+
+function loadImage(){
+  const img = currentImg(); if(!img) return;
+  document.getElementById('img-id').textContent     = img.imageId || img.imageUrl;
+  document.getElementById('meta-row').textContent   = 'Row ' + img.rowIndex;
+  document.getElementById('meta-status').textContent= img.status;
+  document.getElementById('unid-img-id').textContent= img.imageId || img.imageUrl;
+  const remaining = QUEUE.length - state.queueIdx;
+  document.getElementById('queue-badge').textContent = remaining + ' remaining';
+  setImg('review-img-box', img.imageUrl);
+}
+
+/* ══════════════════════════════════════════
+   ANNOTATION FLOW
+══════════════════════════════════════════ */
+function gotoAnnotation(){
+  state.tickedItems=[]; state.bagType=null; state.peekOpen=false;
+  const img = currentImg();
+  setImg('observe-img-box', img.imageUrl);
+  setImg('bagcheck-img-box', img.imageUrl);
+  document.getElementById('peek-thumb-box').innerHTML = `<img src="${img.imageUrl}" alt="thumb" onerror="this.style.opacity='.3'"/>`;
+  document.getElementById('peek-img-id-label').textContent = img.imageId || img.imageUrl;
+  document.getElementById('peek-row').textContent = 'Row ' + img.rowIndex;
+  document.getElementById('peek-chevron').classList.remove('open');
+  document.getElementById('peek-bar').setAttribute('aria-expanded','false');
+  const callout = document.getElementById('peek-callout');
+  callout.classList.remove('open-state');
+  callout.innerHTML = '<span class="dot"></span> Tap to see the image';
+  document.getElementById('annotate-img-peek').style.height = '42px';
+  renderItemList();
+  goto('s-observe');
+}
+
+function togglePeek(){
+  state.peekOpen = !state.peekOpen;
+  document.getElementById('peek-chevron').classList.toggle('open', state.peekOpen);
+  document.getElementById('peek-bar').setAttribute('aria-expanded', state.peekOpen);
+  const callout = document.getElementById('peek-callout');
+  if(state.peekOpen){ callout.classList.add('open-state'); callout.innerHTML='Image preview'; }
+  else { callout.classList.remove('open-state'); callout.innerHTML='<span class="dot"></span> Tap to see the image'; }
+  const content = document.getElementById('peek-content');
+  document.getElementById('annotate-img-peek').style.height = state.peekOpen ? (42+content.scrollHeight+4)+'px' : '42px';
+}
+
+function renderItemList(filter=''){
+  const f = filter.toLowerCase();
+  const items = MASTER_ITEMS.filter(i=>!f||i.toLowerCase().includes(f));
+  document.getElementById('item-list').innerHTML = items.map(item=>{
+    const ticked = state.tickedItems.includes(item);
+    return `<div class="item-row${ticked?' ticked':''}"><span class="item-name">${item}</span><button class="tick-btn" onclick="tickItem('${item}')">${ticked?'✅ ticked':'○ tick'}</button></div>`;
+  }).join('');
+  const n = state.tickedItems.length;
+  document.getElementById('ticked-count-badge').textContent = n+' ticked';
+  document.getElementById('ticked-summary-text').textContent = n===0 ? 'No items ticked yet' : state.tickedItems.slice(-2).join(', ')+(n>2?' + more':'');
+  document.getElementById('ticked-summary-count').textContent = n>0 ? n+' ✅' : '';
+}
+function filterItems(){ renderItemList(document.getElementById('item-search').value); }
+function tickItem(item){
+  if(!state.tickedItems.includes(item)) state.tickedItems.push(item);
+  else state.tickedItems = state.tickedItems.filter(i=>i!==item);
+  renderItemList(document.getElementById('item-search').value);
+}
+
+function gotoUnidentifiable(){
+  document.getElementById('unid-reason').value='';
+  document.getElementById('unid-saved').style.display='none';
+  document.getElementById('unid-err').classList.remove('show');
+  goto('s-unid');
+}
+
+async function saveUnidentifiable(){
+  const r = document.getElementById('unid-reason').value.trim();
+  if(!r){ document.getElementById('unid-err').classList.add('show'); return; }
+  document.getElementById('unid-err').classList.remove('show');
+  const btn = document.getElementById('unid-btn');
+  btn.disabled = true;
+  const img = currentImg();
+  await apiPost({
+    action: 'updateRow',
+    rowIndex: img.rowIndex,
+    status: 'Unidentifiable',
+    items: '',
+    bagType: '',
+    reason: r,
+    annotatedAt: new Date().toISOString()
+  });
+  document.getElementById('unid-saved').style.display='block';
+  state.unidCount++;
+  btn.disabled = false;
+  setTimeout(()=>{ document.getElementById('unid-saved').style.display='none'; advanceQueue(); }, 1200);
+}
+
+function gotoBagCheck(){ goto('s-bagcheck'); }
+
+function gotoClassify(){
+  document.querySelectorAll('.classify-opt').forEach(o=>o.classList.remove('selected'));
+  state.bagType=null; document.getElementById('classify-err').classList.remove('show');
+  goto('s-classify');
+}
+function selectBagType(type,el){
+  document.querySelectorAll('.classify-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected'); state.bagType=type;
+}
+function confirmClassify(){
+  if(!state.bagType){ document.getElementById('classify-err').classList.add('show'); return; }
+  document.getElementById('classify-err').classList.remove('show'); gotoSubmit();
+}
+
+function gotoSubmit(){
+  const img = currentImg();
+  const bl = {household:'🏠 Household', hotel_restaurant:'🍽️ Hotel or Restaurant', industrial:'🏭 Industrial'};
+  document.getElementById('sum-id').textContent    = img.imageId || img.imageUrl;
+  document.getElementById('sum-items').textContent = state.tickedItems.length ? state.tickedItems.join(', ') : 'None';
+  document.getElementById('sum-bag').textContent   = state.bagType ? bl[state.bagType] : 'None';
+  goto('s-submit');
+}
+
+async function doSubmit(){
+  const btn = document.getElementById('submit-btn');
+  const loading = document.getElementById('submit-loading');
+  btn.disabled=true; loading.style.display='block';
+  const img = currentImg();
+  const bl = {household:'Household', hotel_restaurant:'Hotel or Restaurant', industrial:'Industrial'};
+  await apiPost({
+    action: 'updateRow',
+    rowIndex: img.rowIndex,
+    status: 'Completed',
+    items: state.tickedItems.join(', '),
+    bagType: state.bagType ? bl[state.bagType] : 'None',
+    reason: '',
+    annotatedAt: new Date().toISOString()
+  });
+  state.annotatedCount++;
+  btn.disabled=false; loading.style.display='none';
+  advanceQueue();
+}
+
+function advanceQueue(){
+  state.queueIdx++;
+  if(state.queueIdx >= QUEUE.length){
+    document.getElementById('done-annotated').textContent = state.annotatedCount;
+    document.getElementById('done-unid').textContent      = state.unidCount;
+    goto('s-done');
+  } else {
+    state.tickedItems=[]; state.bagType=null;
+    loadImage(); goto('s-image');
+  }
+}
+
+/* ══════════════════════════════════════════
+   OVERLAYS
+══════════════════════════════════════════ */
+function showExit(){ document.getElementById('exit-overlay').classList.add('show'); }
+function hideExit(){ document.getElementById('exit-overlay').classList.remove('show'); }
+function confirmExit(){ hideExit(); goto('s-role'); }
+
+/* ══════════════════════════════════════════
+   INIT — check for saved URL
+══════════════════════════════════════════ */
+(function init(){
+  // URL is baked in — go straight to role screen
+  goto('s-role');
+  renderItemList();
+})();
+</script>
+</body>
+</html>
